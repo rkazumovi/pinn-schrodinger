@@ -1,29 +1,25 @@
 # Physics-Informed Neural Network for the Schrödinger Equation
 
-A TensorFlow Physics-Informed Neural Network (PINN) that solves the 1D
-time-dependent Schrödinger equation for a particle in an infinite square
-well, and validates the learned wavefunction against the exact analytical
-solution.
+A TensorFlow Physics-Informed Neural Network (PINN) that solves the 1D time-dependent Schrödinger equation for a particle in an infinite square well, and validates the learned wavefunction against the exact analytical solution.
 
 ![Architecture and training pipeline](assets/architecture_diagram.svg)
 
+![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.21-FF6F00?logo=tensorflow&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-3.0-150458?logo=pandas&logoColor=white)
+![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white)
+
 ## Overview
 
-The network learns a complex-valued wavefunction $\psi(x,t)$ that satisfies
-the Schrödinger equation, a fixed boundary condition, and a given initial
-condition — without ever being shown the analytical solution during
-training. Physics is enforced entirely through the loss function via
-automatic differentiation, not through labeled solution data.
+The network learns a complex-valued wavefunction $\psi(x,t)$ that satisfies the Schrödinger equation, a fixed boundary condition, and a given initial condition — without ever being shown the analytical solution during training. Physics is enforced entirely through the loss function via automatic differentiation, not through labeled solution data.
 
 ## The Physics
 
-The time-dependent Schrödinger equation for a particle of mass $m$ in a
-potential $V(x)$ is:
+The time-dependent Schrödinger equation for a particle of mass $m$ in a potential $V(x)$ is:
 
 $$i\hbar \frac{\partial \psi}{\partial t} = -\frac{\hbar^2}{2m}\frac{\partial^2 \psi}{\partial x^2} + V(x)\psi$$
 
-Working in natural units ($\hbar = m = 1$), the **infinite square well**
-(particle in a box) on $x \in [0,1]$ has:
+Working in natural units ($\hbar = m = 1$), the **infinite square well** (particle in a box) on $x \in [0,1]$ has:
 
 $$V(x) = \begin{cases} 0 & 0 < x < 1 \\ \infty & \text{otherwise} \end{cases}$$
 
@@ -31,40 +27,31 @@ with boundary and initial conditions:
 
 $$\psi(0,t) = \psi(1,t) = 0, \qquad \psi(x,0) = \sin(\pi x)$$
 
-The initial condition is exactly the ground-state eigenfunction, so the
-system has a known closed-form solution for all $t$:
+The initial condition is exactly the ground-state eigenfunction, so the system has a known closed-form solution for all $t$:
 
 $$\psi(x,t) = \sin(\pi x)\, e^{-i\pi^2 t / 2}$$
 
-This exact solution is used **only for validation** — the network never
-sees it during training.
+This exact solution is used **only for validation** — the network never sees it during training.
 
 ## Handling a Complex-Valued Output
 
-Neural networks output real numbers, but $\psi$ is complex. The wavefunction
-is split into real and imaginary parts:
+Neural networks output real numbers, but $\psi$ is complex. The wavefunction is split into real and imaginary parts:
 
 $$\psi(x,t) = u(x,t) + i\,v(x,t)$$
 
-and a single network produces **both** $u$ and $v$ simultaneously from
-inputs $(x,t)$.
+and a single network produces **both** $u$ and $v$ simultaneously from inputs $(x,t)$.
 
-Substituting into the Schrödinger equation (with $V=0$ inside the well) and
-separating real/imaginary components gives two coupled, real-valued PDE
-residuals the network must drive to zero:
+Substituting into the Schrödinger equation (with $V=0$ inside the well) and separating real/imaginary components gives two coupled, real-valued PDE residuals the network must drive to zero:
 
 $$f_u := \frac{\partial u}{\partial t} + \frac{1}{2}\frac{\partial^2 v}{\partial x^2} = 0$$
 
 $$f_v := \frac{\partial v}{\partial t} - \frac{1}{2}\frac{\partial^2 u}{\partial x^2} = 0$$
 
-These derivatives are computed exactly via automatic differentiation, using
-nested `tf.GradientTape` — an outer tape for the second spatial derivative,
-an inner tape for the first-order derivatives in $x$ and $t$.
+These derivatives are computed exactly via automatic differentiation, using nested `tf.GradientTape` — an outer tape for the second spatial derivative, an inner tape for the first-order derivatives in $x$ and $t$.
 
 ## Loss Function
 
-The total loss combines three MSE terms, each over a different set of
-sampled points:
+The total loss combines three MSE terms, each over a different set of sampled points:
 
 $$\mathcal{L} = \mathcal{L}_{\text{PDE}} + \mathcal{L}_{\text{BC}} + \mathcal{L}_{\text{IC}}$$
 
@@ -74,9 +61,7 @@ $$\mathcal{L}_{\text{BC}} = \frac{1}{N_b}\sum_{i=1}^{N_b}\left(u_i^2 + v_i^2\rig
 
 $$\mathcal{L}_{\text{IC}} = \frac{1}{N_0}\sum_{i=1}^{N_0}\left[(u_i - \sin(\pi x_i))^2 + v_i^2\right] \qquad \text{400 points at } t=0$$
 
-All point sets are sampled using **Latin Hypercube Sampling**
-(`scipy.stats.qmc`) for better space-filling coverage than plain uniform
-random sampling.
+All point sets are sampled using **Latin Hypercube Sampling** (`scipy.stats.qmc`) for better space-filling coverage than plain uniform random sampling.
 
 ## Network Architecture
 
@@ -102,17 +87,13 @@ random sampling.
 
 | Metric | Value |
 |---|---|
-| Initial total loss | 0.9615 |
-| Final total loss (epoch 5000) | 3.807 × 10⁻⁴ |
-| Loss reduction | ~2526× |
+| Total loss, epoch 1 | 0.3941 |
+| Final total loss (epoch 5000) | 3.896 × 10⁻⁴ |
+| Loss reduction | ~1011× |
 
 ## Validation Against the Analytical Solution
 
-Since the initial condition is the exact ground state, the true probability
-density $\lvert\psi(x,t)\rvert^2 = \sin^2(\pi x)$ is **time-independent** —
-the system is a stationary state. This gives a strong, visually intuitive
-check: the trained network's predicted probability density should stay
-essentially flat across all $t$, matching the exact solution.
+Since the initial condition is the exact ground state, the true probability density $\lvert\psi(x,t)\rvert^2 = \sin^2(\pi x)$ is **time-independent** — the system is a stationary state. This gives a strong, visually intuitive check: the trained network's predicted probability density should stay essentially flat across all $t$, matching the exact solution.
 
 ### Snapshots at Fixed Times
 
@@ -140,7 +121,6 @@ essentially flat across all $t$, matching the exact solution.
 ```
 pinn-schrodinger/
 ├── src/
-│   ├── __init__.py
 │   ├── model.py         # TensorFlow network architecture
 │   ├── data.py          # LHS training point generation (Pandas + scipy.qmc)
 │   ├── losses.py        # Complex PDE residual, boundary, initial losses
@@ -150,6 +130,7 @@ pinn-schrodinger/
 │   └── architecture_diagram.svg
 ├── outputs/              # Saved CSVs, plots, trained weights
 ├── main.py               # Full pipeline entry point
+├── verify_setup.py       # Environment/dependency sanity check
 └── requirements.txt      # Dependencies
 ```
 
@@ -175,15 +156,10 @@ python main.py
 
 ## Stack
 
-Python · TensorFlow · Pandas · NumPy · Matplotlib · SciPy
+Python · TensorFlow 2.21 · Pandas · NumPy · Matplotlib · SciPy
 
 ## Possible Extensions
 
-- **L-BFGS fine-tuning** after Adam — the standard second stage in PINN
-  literature, typically tightens the final error by another order of
-  magnitude
-- **Higher energy eigenstates** ($\psi_n(x,0) = \sin(n\pi x)$) or
-  superpositions of eigenstates, which make $\lvert\psi\rvert^2$ genuinely
-  time-dependent — a more demanding test of the learned dynamics
-- **Non-zero potentials** $V(x)$ — finite well, harmonic oscillator, or
-  barrier scattering
+- **L-BFGS fine-tuning** after Adam — the standard second stage in PINN literature, typically tightens the final error by another order of magnitude
+- **Higher energy eigenstates** ($\psi_n(x,0) = \sin(n\pi x)$) or superpositions of eigenstates, which make $\lvert\psi\rvert^2$ genuinely time-dependent — a more demanding test of the learned dynamics
+- **Non-zero potentials** $V(x)$ — finite well, harmonic oscillator, or barrier scattering
